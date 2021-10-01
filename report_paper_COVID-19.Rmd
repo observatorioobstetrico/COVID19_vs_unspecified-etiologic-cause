@@ -1,0 +1,966 @@
+---
+title: "Demographic and epidemiological characteristics of pregnant and postpartum women who died from Severe Acute Respiratory Syndrome in Brazil: a comparison between COVID-19 and nonspecific etiologic causes"
+author: 'Codes and outputs'
+date: "10/01/2021"
+output:   
+  pdf_document:
+    keep_tex: yes
+  word_document: default
+  html_document:
+    df_print: paged
+    self_contained: no
+---
+
+# Description
+ 
+This file presents the documentation of the analysis of article "Demographic and epidemiological characteristics of pregnant and postpartum women who died from Severe Acute Respiratory Syndrome in Brazil: a comparison between COVID-19 and nonspecific etiologic causes".
+
+# R packages used, functions and dataset import
+
+
+The data are analyzed using the free-software R (https://www.R-project.org) in version 4.0.3. Next, we present and load the libraries used in the data analysis process.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r pacotes, echo=TRUE, message=FALSE, warning =FALSE,error=FALSE, results='hide'}
+#load packages
+loadlibrary <- function(x) {
+  if (!require(x, character.only = TRUE)) {
+    install.packages(x, dependencies = T)
+    if (!require(x, character.only = TRUE))
+      stop("Package not found")
+  }
+}
+
+packages <-
+  c(
+    "dplyr",
+    "lubridate",
+    "readr",
+    "readxl",
+    "ggplot2",
+    "kableExtra",
+    "tables",
+    "questionr",
+    "car",
+    "data.table",
+    "magrittr",
+    "tidyverse",
+    "readxl",
+    "summarytools",
+    "modelsummary",
+    "RColorBrewer",
+    "zoo",
+    "grid",
+    "gridExtra",
+    "cowplot",
+    "effectsize",
+    "rcompanion",
+    "DescTools"
+  )
+lapply(packages, loadlibrary)
+```
+
+One can see below the functions that will be used in the data analysis.
+```{r,echo=TRUE, eval=TRUE, message=FALSE,warning =FALSE,error=FALSE,results='hide'}
+#functions for summary measures
+media <- function(x)
+  mean(x, na.rm = TRUE)
+mediana <- function(x)
+  median(x, na.rm = TRUE)
+DP <- function(x)
+  sd(x, na.rm = TRUE)
+minimo <- function(x)
+  base::min(x, na.rm = TRUE)
+maximo <- function(x)
+  base::max(x, na.rm = TRUE)
+q25 <- function(x)
+  stats::quantile(x, p = 0.25, na.rm = TRUE)
+q75 <- function(x)
+  stats::quantile(x, p = 0.75, na.rm = TRUE)
+IQR <- function(x)
+  round(q75(x) - q25(x), 2)
+n <- function(x)
+  sum(!is.na(x))
+```
+
+
+The Influenza Epidemiological
+Surveillance Information System, SIVEP-Gripe (Sistema de Informação de Vigilância Epidemiológica da Gripe), is a
+nationwide surveillance database used to monitor severe acute respiratory infections in Brazil. 
+
+Notification is mandatory for Influenza Syndrome (characterized by at least two of the following signs and symptoms: fever, even if referred, chills, sore throat, headache, cough, runny nose, olfactory or taste disorders) and who has dyspnea/respiratory discomfort or persistent pressure in the chest or O2 saturation less than 95\% in room air or bluish color of the lips or face. Asymptomatic individuals with laboratory confirmation by molecular biology or immunological examination for COVID-19 infection are also reported.
+
+For notifications in Sivep-Gripe, hospitalized cases in both public and private hospitals and all deaths due to severe acute respiratory infections regardless of hospitalization must be considered.
+
+The search was limited to the first notified case of COVID-19 in February 2020 until the 15th epidemiological week of 2021 (up to April 17, 2021). The datasets were obtained on May 5, 2021, on the site https://opendatasus.saude.gov.br/dataset. The first period (8th to 53rd epidemiological week of 2020) and the second period (1st to 15th epidemiological week of 2021) datasets can be obtained at https://drive.google.com/file/d/1jts4h0ovdwFh86SdKyslMLSG9rOy3UjX/view?usp=sharing and at https://drive.google.com/file/d/1gQSy_dcUkd1UrDEcsrDbyGl4gEvcI8z_/view?usp=sharing, respectively. The data are loaded below:
+
+```{r,echo=FALSE, eval=TRUE, message=FALSE,warning =FALSE,error=FALSE,results='hide'}
+ memory.limit(999999)
+```
+
+
+```{r,echo=TRUE,message=FALSE,warning =FALSE,error=FALSE,results='hide'}
+#loading the datasets
+#2021
+data_2021 <- read_delim(
+  "INFLUD21-03-05-2021.csv",
+  ";",
+  escape_double = FALSE,
+  locale = locale(encoding = "ISO-8859-2"),
+  trim_ws = TRUE
+)
+
+#2020
+data_2020 <- read_delim(
+  "INFLUD-03-05-2021.csv",
+  ";",
+  escape_double = FALSE,
+  locale = locale(encoding = "ISO-8859-2"),
+  trim_ws = TRUE
+)
+
+sem <- 15 #limit of epidemiological week of 2021
+
+#### Concatenating 2020 and 2021 data ##############
+data_all <- rbind(data_2020, data_2021)
+
+# Creating the case year variable
+data_all <-  data_all %>%
+  dplyr::mutate(
+    dt_sint = as.Date(DT_SIN_PRI, format = "%d/%m/%Y"),
+    year_case = lubridate::year(dt_sint)
+  )
+
+```
+
+There are `r dim(data_all)[1]` cases in the complete dataset.  The case selection is presented in the following according to the flowchart presented in the article. 
+
+# Case selection and data treatment
+
+The first filter consists of selecting the cases from 8th epidemiological week of 2020 to 15th epidemiological week of 2021. 
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+#Cases from the 8th epidemiological week of 2020
+data1 <- data_all %>% 
+  filter((year_case == 2020 & SEM_PRI >= 8) | year_case == 2021)
+```
+
+There are `r dim(data1[data1$year_case==2021  & data1$SEM_PRI==53, ])[1]` cases in 2021 in epidemiological week 53 of 2020. These are cases from the first two days of 2021, which are still part of the last epidemiological week of 2020 (http://portalsinan.saude.gov.br/calendario-epidemiologico?layout=edit&id=168). However, these cases belong to the 53rd week of 2020 and we corrected as follows:
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+data2 <- data1 %>% 
+  mutate(year_case = ifelse(year_case == 2021 & SEM_PRI ==53, 2020, year_case)) %>% 
+  filter(year_case == 2020 | (year_case == 2021 & SEM_PRI <= sem)) 
+```
+
+There are `r dim(data2)[1]` observations.
+
+The next selection consists of selecting females cases:
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+#filtering F cases
+data3 <- filter(data2, CS_SEXO == "F")
+```
+
+There are `r dim(data3)[1]` observations.
+
+The next step is to identify pregnant and postpartum people (variable `classi_gesta_puerp`) and then select only those cases.
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+#Creating the classification variable if pregnant, postpartum and not (neither pregnant nor postpartum)
+data3 <- data3 %>%
+  mutate(
+    classi_gesta_puerp = case_when(
+      CS_GESTANT == 1  ~ "1tri", #1st trimester
+      CS_GESTANT == 2  ~ "2tri", #2st trimester
+      CS_GESTANT == 3  ~ "3tri", #3st trimester
+      CS_GESTANT == 4  ~ "GA_ig", #ignored gestational Age
+      CS_GESTANT == 5 &
+        PUERPERA == 1 ~ "puerp", #puerperium
+      CS_GESTANT == 9 & PUERPERA == 1 ~ "puerp",  #puerperium
+      TRUE ~ "no" #neither pregnant nor postpartum 
+    )
+  )
+
+#Filtering only pregnant and postpartum women
+data4 <- data3 %>%
+  filter(classi_gesta_puerp != "no")
+```
+
+There are `r dim(data4)[1]` observations.
+
+The next selection consists of selecting women between 10 and 55 years old. 
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+# Filtering ages between 10 and 55 years old
+data5 <- data4 %>%
+  filter(TP_IDADE == 3 | (TP_IDADE != 3 & NU_IDADE_N >=8) #NU_IDADE_N is the age variable
+         ) %>% 
+  filter(NU_IDADE_N > 9 & NU_IDADE_N <= 55)
+```
+
+There are `r dim(data5)[1]` observations.
+
+
+Now we are going to select only the cases confirmed by COVID-19 (CLASSI_FIN = 5) or unspecified (CLASSI_FIN = 4). 
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+#Filtering only covid or unspecified cases
+data6 <- data5 %>% 
+    filter(CLASSI_FIN == 5 | CLASSI_FIN ==4)
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+freq(data6$CLASSI_FIN)
+```
+
+There are `r dim(data6)[1]` observations.
+
+We are now going to select only the death cases. The variable is `EVOLUCAO`, with 1 - cure, 2 - death by SARS, 3 - death by other cause. 
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+data6 <- data6 %>% 
+  mutate(death = case_when(
+    EVOLUCAO == 1 ~ "cure", 
+    EVOLUCAO == 2 ~ "death", 
+    EVOLUCAO == 3 ~ "death", 
+    TRUE ~ NA_character_
+  ))
+
+
+data7 <- data6 %>% 
+  filter((EVOLUCAO == 2 | EVOLUCAO == 3) & !is.na(EVOLUCAO))
+```
+
+There are `r dim(data7)[1]` observations.
+
+
+Now labeling group variable:
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+data7 <- data7 %>% 
+  mutate(group = case_when(
+    CLASSI_FIN ==5 ~ "covid-19", 
+    TRUE ~ "unspecified"
+  ))
+data7$group <- factor(data7$group, 
+                     levels = c("unspecified","covid-19"))
+
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, freq(group))
+```
+
+# Epidemiologic characteristics 
+
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+# Ethnicity
+data7 <-  data7 %>%
+  mutate(
+    ethnicity = case_when(
+      CS_RACA == 1 ~ "white",
+      CS_RACA == 2 ~ "black",
+      CS_RACA == 3 ~ "yellow",
+      CS_RACA == 4 ~ "brown",
+      CS_RACA == 5 ~ "indigenous",
+      TRUE ~ NA_character_
+    )
+  )
+
+# Education
+data7 <-  data7 %>%
+  mutate(education = case_when(CS_ESCOL_N == 0 ~ "no education",
+                             CS_ESCOL_N == 1 | CS_ESCOL_N == 2 ~ "primary education",
+                             CS_ESCOL_N == 3 ~ "secundary education",
+                             CS_ESCOL_N == 4 ~ "higher education",
+                               TRUE ~ NA_character_))
+
+data7$education <- factor(data7$education, 
+                     levels = c("no education","primary education", 
+                                "secundary education", "higher education"))
+
+# Age group
+data7 <-  data7 %>%
+  mutate(
+    age_group = case_when(
+      NU_IDADE_N <= 19 ~ "<20",
+      NU_IDADE_N >= 20
+      & NU_IDADE_N <= 34 ~ "20-34",
+      NU_IDADE_N >= 35 ~ ">=35",
+      TRUE ~ NA_character_
+    )
+  )
+data7$age_group <-
+  factor(data7$age_group, levels = c("<20", "20-34", ">=35"))
+
+
+# Residence area
+data7 <-  data7 %>%
+  mutate(zone = case_when(CS_ZONA ==1  ~ "urban",
+                             CS_ZONA == 2 ~ "rural",
+                             CS_ZONA == 3 ~ "periurban",
+                               TRUE ~ NA_character_))
+```
+
+## Ethnicity
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, ctable(ethnicity, group,  prop = "c", useNA = "no", chisq = FALSE))
+```
+
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, fisher.test(ethnicity, group))
+```
+
+
+## Education
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, ctable(education, group, prop = "c", useNA = "no", chisq = FALSE))
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, fisher.test(education, group))
+```
+
+## Age 
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+datasummary((group) ~  NU_IDADE_N*(n+media+DP+mediana+q25+q75+IQR),
+            data = data7, output = 'markdown')
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+#t test
+t.test(NU_IDADE_N ~ group, data = data7)
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+#effect size
+c_cohen <- cohens_d(NU_IDADE_N ~ as.factor(group),data=data7)
+c_cohen
+interpret_d(c_cohen$Cohens_d,rules="cohen1988")
+```
+
+## Age group
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, ctable(age_group, group, prop = "c", useNA = "no", chisq = FALSE))
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, fisher.test(age_group, group))
+```
+
+## Residence area
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, ctable(zone, group, prop = "c", useNA = "no", chisq = FALSE))
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, fisher.test(zone, group))
+```
+
+## Gestational moment
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, ctable(classi_gesta_puerp, group, prop = "c", useNA = "no", chisq = TRUE))
+```
+
+
+# Comorbities
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+#Cardiac
+data7 <-  data7 %>%
+  mutate(cardiac = case_when(CARDIOPATI == 1 ~ "yes",
+                             CARDIOPATI == 2 ~ "no",
+                             TRUE ~ NA_character_))
+
+#Hematologic
+data7 <-  data7 %>%
+  mutate(hematologic = case_when(HEMATOLOGI == 1 ~ "yes",
+                                 HEMATOLOGI == 2 ~ "no",
+                                 TRUE ~ NA_character_))
+
+#Hepatic
+data7 <-  data7 %>%
+  mutate(hepatic = case_when(HEPATICA == 1 ~ "yes",
+                             HEPATICA == 2 ~ "no",
+                             TRUE ~ NA_character_))
+
+#Asthma
+data7 <-  data7 %>%
+  mutate(asthma = case_when(ASMA == 1 ~ "yes",
+                            ASMA == 2 ~ "no",
+                            TRUE ~ NA_character_))
+
+#Diabetes
+data7 <-  data7 %>%
+  mutate(diabetes = case_when(DIABETES == 1 ~ "yes",
+                              DIABETES == 2 ~ "no",
+                              TRUE ~ NA_character_))
+
+#Neurologic
+data7 <-  data7 %>%
+  mutate(neurologic = case_when(NEUROLOGIC == 1 ~ "yes",
+                                NEUROLOGIC == 2 ~ "no",
+                                TRUE ~ NA_character_))
+
+#Pneumologic
+data7 <-  data7 %>%
+  mutate(pneumologic = case_when(PNEUMOPATI == 1 ~ "yes",
+                                 PNEUMOPATI == 2 ~ "no",
+                                 TRUE ~ NA_character_))
+
+#Imunossupression
+data7 <-  data7 %>%
+  mutate(imuno = case_when(IMUNODEPRE == 1 ~ "yes",
+                           IMUNODEPRE == 2 ~ "no",
+                           TRUE ~ NA_character_))
+
+#Renal
+data7 <-  data7 %>%
+  mutate(renal = case_when(RENAL == 1 ~ "yes",
+                           RENAL == 2 ~ "no",
+                           TRUE ~ NA_character_))
+
+#Obesity
+data7 <-  data7 %>%
+  mutate(obesity = case_when(OBESIDADE == 1 ~ "yes",
+                             OBESIDADE == 2 ~ "no",
+                             TRUE ~ NA_character_))
+
+#Any comorbidity
+
+df <- data7 %>% 
+  select(cardiac,obesity,hematologic,hepatic,asthma,diabetes,neurologic,pneumologic,imuno,renal)
+
+#if all comorbities in df are NA (not available), return NA.
+soma <- function(x){
+  if (sum(is.na(x))==10)
+    return(NA_character_)
+  else
+    return(sum(!is.na(x) & x=="yes")) 
+}
+data7$qt_comorb_aux <- apply(df,1,soma)
+
+data7 <- data7 %>%
+  mutate(comorbidity = case_when(qt_comorb_aux >= 1 ~ "yes",
+                                 qt_comorb_aux == 0 ~ "no",
+                                 TRUE ~ NA_character_))
+```
+
+## Cardiac
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, cardiac, prop = "r", useNA = "no", chisq = TRUE, OR = TRUE))
+```
+
+##  Hematologic
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, hematologic, prop = "r", useNA = "no", chisq = FALSE, OR = TRUE))
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, fisher.test(hematologic, group))
+```
+
+##  Diabetes
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+ctable(data7$group, data7$diabetes, chisq=TRUE, prop="r",  useNA = "no", OR = TRUE)
+```
+
+##  Obesity
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+ctable(data7$group, data7$obesity, chisq=TRUE, prop="r",  useNA = "no", OR = TRUE)
+```
+
+##  Asthma
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+ctable(data7$group, data7$asthma, chisq=TRUE, prop="r",  useNA = "no", OR = TRUE)
+```
+
+##  Hepatic
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+ctable(data7$group, data7$hepatic, chisq=FALSE, prop="r",  useNA = "no", OR = TRUE)
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, fisher.test(hepatic, group))
+```
+
+##  Neurologic
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+ctable(data7$group, data7$neurologic, chisq=FALSE, prop="r",  useNA = "no", OR = TRUE)
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, fisher.test(neurologic, group))
+```
+
+##  Pneumologic
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+ctable(data7$group, data7$pneumologic, chisq=TRUE, prop="r",  useNA = "no", OR = TRUE)
+```
+
+##  Imunossupression
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+ctable(data7$group, data7$imuno, chisq=TRUE, prop="r", useNA = "no", OR = TRUE)
+```
+
+##  Renal
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+ctable(data7$group, data7$renal, chisq=FALSE, prop="r",  useNA = "no", OR = TRUE)
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, fisher.test(renal, group))
+```
+
+## Any comorbidity
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, comorbidity, prop = "r", useNA = "no", chisq = TRUE, OR = TRUE))
+```
+
+# Symptoms
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+# Fever
+data7 <-  data7 %>%
+  mutate(fever = case_when(FEBRE == 1 ~ "yes",
+                           FEBRE == 2 ~ "no",
+                           TRUE ~ NA_character_))
+
+# Cough
+data7 <-  data7 %>%
+  mutate(cough = case_when(TOSSE == 1 ~ "yes",
+                           TOSSE == 2 ~ "no",
+                           TRUE ~ NA_character_))
+
+# Sore throat
+data7 <-  data7 %>%
+  mutate(sore_throat = case_when(GARGANTA == 1 ~ "yes",
+                                 GARGANTA == 2 ~ "no",
+                                 TRUE ~ NA_character_))
+
+# Dyspnea
+data7 <-  data7 %>%
+  mutate(dyspnea = case_when(DISPNEIA == 1 ~ "yes",
+                             DISPNEIA == 2 ~ "no",
+                             TRUE ~ NA_character_))
+
+# Respiratory discomfort
+data7 <-  data7 %>%
+  mutate(resp_disc = case_when(DESC_RESP == 1 ~ "yes",
+                               DESC_RESP == 2 ~ "no",
+                               TRUE ~ NA_character_))
+
+# Desaturation
+data7 <-  data7 %>%
+  mutate(desaturation = case_when(SATURACAO == 1 ~ "yes",
+                                  SATURACAO == 2 ~ "no",
+                                  TRUE ~ NA_character_))
+
+# Diarrhea
+data7 <-  data7 %>%
+  mutate(diarrhea = case_when(DIARREIA == 1 ~ "yes",
+                              DIARREIA == 2 ~ "no",
+                              TRUE ~ NA_character_))
+
+# Vomit
+data7 <-  data7 %>%
+  mutate(vomit = case_when(VOMITO == 1 ~ "yes",
+                           VOMITO == 2 ~ "no",
+                           TRUE ~ NA_character_))
+
+# Abdominal pain
+data7 <-  data7 %>%
+  mutate(abd_pain = case_when(DOR_ABD == 1 ~ "yes",
+                              DOR_ABD == 2 ~ "no",
+                              TRUE ~ NA_character_))
+
+# Fatigue
+data7 <-  data7 %>%
+  mutate(fatigue = case_when(FADIGA == 1 ~ "yes",
+                             FADIGA == 2 ~ "no",
+                             TRUE ~ NA_character_))
+
+# Olfactory loss
+data7 <-  data7 %>%
+  mutate(olfac_loss = case_when(PERD_OLFT == 1 ~ "yes",
+                                PERD_OLFT == 2 ~ "no",
+                                TRUE ~ NA_character_))
+
+# Loss of taste
+data7 <-  data7 %>%
+  mutate(loss_taste = case_when(PERD_PALA == 1 ~ "yes",
+                                PERD_PALA == 2 ~ "no",
+                                TRUE ~ NA_character_))
+
+# Any respiratory symptom
+df <- data7 %>% 
+  select(dyspnea,fatigue,desaturation,resp_disc)
+
+soma <- function(x){
+  if (sum(is.na(x))==4)
+    return(NA_character_)
+  else
+    return(sum(!is.na(x) & x=="yes")) 
+}
+data7$qt_sintomas_resp_aux <- apply(df,1,soma)
+
+data7 <-  data7 %>%
+  mutate(resp_symp = case_when(qt_sintomas_resp_aux >=1 ~ "yes",
+                               qt_sintomas_resp_aux ==0 ~ "no",
+                               TRUE ~ NA_character_))
+# Any symptom
+df <- data7 %>% 
+  select(dyspnea,fatigue,desaturation,resp_disc,
+         fever,cough,sore_throat,diarrhea,vomit,abd_pain,olfac_loss,loss_taste)
+soma <- function(x){
+  if (sum(is.na(x))==12)
+    return(NA_character_)
+  else
+    return(sum(!is.na(x) & x=="yes")) 
+}
+data7$qt_sintomas_aux <- apply(df,1,soma)
+
+data7 <-  data7 %>%
+  mutate(symptom = case_when(qt_sintomas_aux >= 1 ~ "yes",
+                             qt_sintomas_aux == 0 ~ "no",
+                             TRUE ~ NA_character_))
+```
+
+## Fever
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, fever, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+
+## Cough
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, cough, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+
+## Sore throat
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, sore_throat, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+##  Dyspnea
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, dyspnea, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+##  Respiratory discomfort
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, resp_disc, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+## Desaturation
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, desaturation, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+## Diarrhea
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, diarrhea, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+##  Vomit
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, vomit, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+## Abdominal pain
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, abd_pain, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+## Fatigue
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, fatigue, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+## Olfactory loss
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, olfac_loss, prop = "r", useNA = "no", chisq = FALSE, OR=TRUE))
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, fisher.test(olfac_loss, group))
+```
+
+## Loss of taste
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, loss_taste, prop = "r", useNA = "no", chisq = FALSE, OR=TRUE))
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, fisher.test(loss_taste, group))
+```
+
+## Any respiratory symptom
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, resp_symp, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+
+## Any symptom
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, symptom, prop = "r", useNA = "no", chisq = FALSE, OR=TRUE))
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+with(data7, fisher.test(symptom, group))
+```
+
+
+# Outcome
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+# Hospital-acquired infection
+data7 <-  data7 %>%
+  mutate(hospital_infection = case_when(NOSOCOMIAL ==1  ~ "yes",
+                             NOSOCOMIAL == 2 ~ "no",
+                               TRUE ~ NA_character_))
+# ICU
+data7 <- data7 %>%
+  mutate(icu = case_when(UTI == 1 ~ "yes",
+                         UTI == 2 ~ "no",
+                         TRUE ~ NA_character_))
+
+# Intubation
+data7 <- data7 %>% 
+  mutate(intubation = case_when(SUPORT_VEN == 1 ~ "yes",
+                                SUPORT_VEN == 2 | SUPORT_VEN == 3 ~ "no",
+                                TRUE ~ NA_character_))
+```
+
+## Hospital-acquired infection
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, hospital_infection, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+
+## ICU
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, icu, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+### Duration of hospitalization in ICU
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+data7 <- data7 %>%
+   dplyr::mutate(
+    dt_entuti = as.Date(DT_ENTUTI, format = "%d/%m/%Y"),
+    dt_saiduti = as.Date(DT_SAIDUTI, format = "%d/%m/%Y"),
+    icu_days = as.numeric(dt_saiduti-dt_entuti)
+)
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+datasummary((group) ~ icu_days*(n+media+DP+mediana+minimo+maximo+q25+q75+IQR),
+            data = data7, output = 'markdown')
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+wilcox.test(icu_days ~ group, data = data7)
+```
+
+
+## Intubation
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(group, intubation, prop = "r", useNA = "no", chisq = TRUE, OR=TRUE))
+```
+
+## Time elapsed between the start of symptoms and the date of death
+
+We will analyze the time between the onset of the first symptoms until the patient's death. Let's create a new variable that will count the number of days of this difference.
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+# Creation of time between the start of symptoms and the date of death
+data7 <- data7 %>%
+   dplyr::mutate(
+    dt_sin_pri = as.Date(DT_SIN_PRI, format = "%d/%m/%Y"),
+    dt_evoluca = as.Date(DT_EVOLUCA, format = "%d/%m/%Y"),
+    days_symp_death = as.numeric(dt_evoluca-dt_sin_pri)
+)
+```
+
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+datasummary((group) ~ days_symp_death*(n+media+DP+mediana+minimo+maximo+q25+q75+IQR),
+            data = data7, output = 'markdown')
+```
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+wilcox.test(days_symp_death ~ group, data = data7)
+```
+
+
+# Distribution of COVID-19 and unspecified etiologic cause by Brazilian states
+
+The distribution of COVID-19 and unspecified etiologic cause cases by Brazilian state (SG_UF variable) is presented. 
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+with(data7, ctable(SG_UF, group, prop = "c")) #SG_UF indicates Brazilian state
+```
+
+Now we consider the rate of deaths per 100,000 live births in each group. The live births data considered is from 2019 and it is available in the link on the link: http://svs.aids.gov.br/dantps/centrais-de-conteudos/paineis-de-monitoramento/natalidade/nascidos-vivos.
+
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+# Database of live births in the year 2019 in Brazil
+data_birth <- read_excel("dados_nascidos_2019.xlsx")
+```
+
+## Covid-19 group
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+#Covid-19
+d1 <- data7 %>% 
+  filter(group == "covid-19")
+
+valor <- data.frame(table(d1$SG_UF))
+colnames(valor) <- c("uf", "n")
+
+dt1_state <- left_join(valor, data_birth, by= "uf")
+
+dt1_state <- dt1_state %>% 
+  mutate(T1 = (n/total)*100000)
+
+dt <- rbind(c("AC",12), c("AL",27), c("AP",16), c("AM",13), c("BA",29), 
+              c("CE",23), c("DF",53), c("ES",32), c("GO",52), c("MA",21), 
+              c("MT",51), c("MS",50), c("MG",31), c("PA",15), c("PB",25), 
+              c("PR",41), c("PE",26), c("PI",22), c("RN",24), c("RS",43), 
+              c("RJ",33), c("RO",11), c("RR",14), c("SC",42), c("SP",35), 
+              c("SE",28), c("TO",17)) %>% data.table %>% `colnames<-`(c("uf","id"))
+mapaUF <- readRDS("mapaUF.Rds")
+dt1 <- full_join(dt, dt1_state, by = "uf")
+
+g1 <- ggplot(dt1) + 
+  geom_map(map = mapaUF, color = 'gray30', aes_string(map_id = "id", fill = "T1")) + 
+  geom_path(data = mapaUF, color = 'gray30', size = .1, aes(x = long, y = lat, group = group)) + 
+  theme_void() + coord_equal() + 
+  labs(fill = "Death \n rate",title="COVID-19 cases") +
+  scale_fill_distiller(palette="Purples",trans="reverse")  
+g1
+```
+
+## Unspecified cause
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+#Unspecified cause
+d2 <- data7 %>% 
+  filter(group == "unspecified")
+
+valor <- data.frame(table(d2$SG_UF))
+colnames(valor) <- c("uf", "n")
+
+dt2_state <- left_join(valor, data_birth, by= "uf")
+
+dt2_state <- dt2_state %>% 
+  mutate(T1 = (n/total)*100000)
+
+dt <- rbind(c("AC",12), c("AL",27), c("AP",16), c("AM",13), c("BA",29), 
+              c("CE",23), c("DF",53), c("ES",32), c("GO",52), c("MA",21), 
+              c("MT",51), c("MS",50), c("MG",31), c("PA",15), c("PB",25), 
+              c("PR",41), c("PE",26), c("PI",22), c("RN",24), c("RS",43), 
+              c("RJ",33), c("RO",11), c("RR",14), c("SC",42), c("SP",35), 
+              c("SE",28), c("TO",17)) %>% data.table %>% `colnames<-`(c("uf","id"))
+mapaUF <- readRDS("mapaUF.Rds")
+dt2 <- full_join(dt, dt2_state, by = "uf")
+g2 <- ggplot(dt2) +
+  geom_map(map = mapaUF, color = 'gray30', aes_string(map_id = "id", fill = "T1")) +
+  geom_path(data = mapaUF, color = 'gray30', size = .1, aes(x = long, y = lat, group = group)) + 
+  theme_void() + coord_equal() + 
+  labs(fill = "Death rate",title="Cases with unspecified cause")  + 
+  scale_fill_distiller(palette="Purples",trans="reverse") 
+g2
+```
+
+## Distribution by Epidemiological Week
+
+First, let's create the variable that will indicate the epidemiological week together with the year case.
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+data7 <- data7 %>%
+  mutate(dt_sin_pri = as.Date(DT_SIN_PRI, format = "%d/%m/%Y")
+)
+data7 <-  data7 %>%
+  mutate(seman_pri = paste(formatC(SEM_PRI, width=2, format="d", flag="0"),
+                            year(dt_sin_pri),sep="/"))
+
+d1 <- rownames_to_column(data.frame(freq(data7$seman_pri,  cum=FALSE,total=TRUE,na.last=FALSE,valid=FALSE)),var="week")
+aux <- str_split(d1$week,"/",simplify=TRUE)
+d1<- data.frame(aux,d1)
+d1$week<- NULL
+d1 <- d1 %>% arrange(X2,X1)
+d1<- d1[-c(1,2),-c(5,6,7)]
+d1 <- rename(d1,"Week"="X1","Year"="X2","n"="Freq","%"="X..Valid") 
+```
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+#frequency table
+d1
+```
+
+Now, to better understand the distribution of time, let's make a graph referring to the month of the first symptom for better visualization. The graph takes into account the percentage of unspecified cases so that the complement is the percentage of covid-19 cases.
+
+```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
+d1 <- data7[data7$dt_sin_pri < as.Date("01/04/2021",format="%d/%m/%Y"),] 
+#FILTERING CASES UNTIL MARCH 2021
+d1 <- d1 %>%
+  mutate(month_year = paste(formatC(month(dt_sin_pri), width=2, format="d", flag="0"),
+                            year(dt_sin_pri),sep="/"))
+
+d <- prop.table(table(d1$month_year, d1$group),1)
+G3 <- as.data.frame(d)
+G3 <- G3[G3$Var2 == "unspecified",]
+G3$Freq <- round((G3$Freq)*100, 2)
+Sys.setlocale("LC_TIME","C")
+G3$Var1 <- as.yearmon(G3$Var1, format = "%m/%Y") 
+
+ggplot(data=G3, aes(x = Var1, y=Freq)) + 
+  geom_line(size=1.2, color="indianred2") + 
+  geom_point(size=3,color="indianred2") + 
+  geom_hline(yintercept = 50) + xlab("Month of first symptom") + 
+  ylab("Relative frequency(%)")
+```
