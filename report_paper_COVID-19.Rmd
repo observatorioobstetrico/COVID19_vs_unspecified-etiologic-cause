@@ -1,9 +1,11 @@
 ---
 title: "Demographic and epidemiological characteristics of pregnant and postpartum women who died from Severe Acute Respiratory Syndrome in Brazil: a comparison between COVID-19 and nonspecific etiologic causes"
 author: 'Codes and outputs'
-date: "10/01/2021"
+date: "02/10/2022"
 output:   
   pdf_document:
+    toc: yes
+    toc_depth: "1"
     keep_tex: yes
   word_document: default
   html_document:
@@ -11,6 +13,7 @@ output:
     self_contained: no
 ---
 
+\newpage
 # Description
  
 This file presents the documentation of the analysis of article "Demographic and epidemiological characteristics of pregnant and postpartum women who died from Severe Acute Respiratory Syndrome in Brazil: a comparison between COVID-19 and nonspecific etiologic causes".
@@ -59,7 +62,9 @@ packages <-
     "cowplot",
     "effectsize",
     "rcompanion",
-    "DescTools"
+    "DescTools",
+    "geobr",
+    "scales"
   )
 lapply(packages, loadlibrary)
 ```
@@ -204,6 +209,11 @@ data5 <- data4 %>%
 
 There are `r dim(data5)[1]` observations.
 
+Now we are going to select only the cases confirmed by COVID-19 (CLASSI_FIN = 5) or unspecified (CLASSI_FIN = 4). The other cases are influenza(CLASSI_FIN = 1), other virus(CLASSI_FIN = 2) and other etiologic agent(CLASSI_FIN = 3).
+
+```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
+freq(data5$CLASSI_FIN)
+```
 
 Now we are going to select only the cases confirmed by COVID-19 (CLASSI_FIN = 5) or unspecified (CLASSI_FIN = 4). 
 
@@ -213,8 +223,17 @@ data6 <- data5 %>%
     filter(CLASSI_FIN == 5 | CLASSI_FIN ==4)
 ```
 
+Now labeling group variable:
+
 ```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
-freq(data6$CLASSI_FIN)
+data6 <- data6 %>% 
+  mutate(group = case_when(
+    CLASSI_FIN ==5 ~ "covid-19", 
+    TRUE ~ "unspecified"
+  ))
+data6$group <- factor(data6$group, 
+                     levels = c("unspecified","covid-19"))
+
 ```
 
 There are `r dim(data6)[1]` observations.
@@ -230,6 +249,7 @@ data6 <- data6 %>%
     TRUE ~ NA_character_
   ))
 
+with(data6, ctable(death, group,  prop = "c", chisq = FALSE))
 
 data7 <- data6 %>% 
   filter((EVOLUCAO == 2 | EVOLUCAO == 3) & !is.na(EVOLUCAO))
@@ -237,26 +257,11 @@ data7 <- data6 %>%
 
 There are `r dim(data7)[1]` observations.
 
-
-Now labeling group variable:
-
-```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
-data7 <- data7 %>% 
-  mutate(group = case_when(
-    CLASSI_FIN ==5 ~ "covid-19", 
-    TRUE ~ "unspecified"
-  ))
-data7$group <- factor(data7$group, 
-                     levels = c("unspecified","covid-19"))
-
-```
-
 ```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
 with(data7, freq(group))
 ```
 
 # Epidemiologic characteristics 
-
 
 ```{r, echo=TRUE, eval= TRUE, message=FALSE, warning =FALSE, error=FALSE}
 # Ethnicity
@@ -301,9 +306,8 @@ data7$age_group <-
 
 # Residence area
 data7 <-  data7 %>%
-  mutate(zone = case_when(CS_ZONA ==1  ~ "urban",
+  mutate(zone = case_when(CS_ZONA ==1 | CS_ZONA == 3 ~ "urban",
                              CS_ZONA == 2 ~ "rural",
-                             CS_ZONA == 3 ~ "periurban",
                                TRUE ~ NA_character_))
 ```
 
@@ -866,22 +870,18 @@ dt1_state <- left_join(valor, data_birth, by= "uf")
 dt1_state <- dt1_state %>% 
   mutate(T1 = (n/total)*100000)
 
-dt <- rbind(c("AC",12), c("AL",27), c("AP",16), c("AM",13), c("BA",29), 
-              c("CE",23), c("DF",53), c("ES",32), c("GO",52), c("MA",21), 
-              c("MT",51), c("MS",50), c("MG",31), c("PA",15), c("PB",25), 
-              c("PR",41), c("PE",26), c("PI",22), c("RN",24), c("RS",43), 
-              c("RJ",33), c("RO",11), c("RR",14), c("SC",42), c("SP",35), 
-              c("SE",28), c("TO",17)) %>% data.table %>% `colnames<-`(c("uf","id"))
-mapaUF <- readRDS("mapaUF.Rds")
-dt1 <- full_join(dt, dt1_state, by = "uf")
+states <- read_state(year = 2020)
 
-g1 <- ggplot(dt1) + 
-  geom_map(map = mapaUF, color = 'gray30', aes_string(map_id = "id", fill = "T1")) + 
-  geom_path(data = mapaUF, color = 'gray30', size = .1, aes(x = long, y = lat, group = group)) + 
-  theme_void() + coord_equal() + 
+states <- dplyr::left_join(states, dt1_state, by = c("abbrev_state" = "uf"))
+
+g1 <- ggplot(data= states) +
+  geom_sf(aes(fill=T1), color= "grey30", size=.15) +
+  theme_void()  + 
   labs(fill = "Death \n rate",title="COVID-19 cases") +
-  scale_fill_distiller(palette="Purples",trans="reverse")  
+  scale_fill_distiller(palette="Purples",trans="reverse") 
+
 g1
+ggsave("covid-19_cases",dpi="print",device="tiff")
 ```
 
 ## Unspecified cause
@@ -899,24 +899,22 @@ dt2_state <- left_join(valor, data_birth, by= "uf")
 dt2_state <- dt2_state %>% 
   mutate(T1 = (n/total)*100000)
 
-dt <- rbind(c("AC",12), c("AL",27), c("AP",16), c("AM",13), c("BA",29), 
-              c("CE",23), c("DF",53), c("ES",32), c("GO",52), c("MA",21), 
-              c("MT",51), c("MS",50), c("MG",31), c("PA",15), c("PB",25), 
-              c("PR",41), c("PE",26), c("PI",22), c("RN",24), c("RS",43), 
-              c("RJ",33), c("RO",11), c("RR",14), c("SC",42), c("SP",35), 
-              c("SE",28), c("TO",17)) %>% data.table %>% `colnames<-`(c("uf","id"))
-mapaUF <- readRDS("mapaUF.Rds")
-dt2 <- full_join(dt, dt2_state, by = "uf")
-g2 <- ggplot(dt2) +
-  geom_map(map = mapaUF, color = 'gray30', aes_string(map_id = "id", fill = "T1")) +
-  geom_path(data = mapaUF, color = 'gray30', size = .1, aes(x = long, y = lat, group = group)) + 
-  theme_void() + coord_equal() + 
+states2 <- read_state(year = 2020)
+
+states2 <- dplyr::left_join(states2, dt2_state, by = c("abbrev_state" = "uf"))
+
+g2 <- ggplot(data= states2) +
+  geom_sf(aes(fill=T1), color= "grey30", size=.15) +
+  theme_void()  + 
   labs(fill = "Death rate",title="Cases with unspecified cause")  + 
   scale_fill_distiller(palette="Purples",trans="reverse") 
+
 g2
+
+ggsave("unspecified_cases",dpi="print",device="tiff")
 ```
 
-## Distribution by Epidemiological Week
+# Distribution by Epidemiological Week
 
 First, let's create the variable that will indicate the epidemiological week together with the year case.
 
@@ -945,22 +943,43 @@ d1
 Now, to better understand the distribution of time, let's make a graph referring to the month of the first symptom for better visualization. The graph takes into account the percentage of unspecified cases so that the complement is the percentage of covid-19 cases.
 
 ```{r, echo=TRUE,message=FALSE,warning =FALSE,error=FALSE}
-d1 <- data7[data7$dt_sin_pri < as.Date("01/04/2021",format="%d/%m/%Y"),] 
 #FILTERING CASES UNTIL MARCH 2021
+d1 <- data7[data7$dt_sin_pri < as.Date("01/04/2021",format="%d/%m/%Y"),] 
+
 d1 <- d1 %>%
   mutate(month_year = paste(formatC(month(dt_sin_pri), width=2, format="d", flag="0"),
-                            year(dt_sin_pri),sep="/"))
+                            year(dt_sin_pri),sep="/")) 
 
-d <- prop.table(table(d1$month_year, d1$group),1)
-G3 <- as.data.frame(d)
-G3 <- G3[G3$Var2 == "unspecified",]
+d <- prop.table(table(d1$month_year,d1$group),1)
+G4 <- as.data.frame(d)
+G3 <- G4[G4$Var2 == "unspecified",]
 G3$Freq <- round((G3$Freq)*100, 2)
 Sys.setlocale("LC_TIME","C")
 G3$Var1 <- as.yearmon(G3$Var1, format = "%m/%Y") 
+G3$Var3 <- as.Date(format(G3$Var1,"%Y-%m-01"))
 
-ggplot(data=G3, aes(x = Var1, y=Freq)) + 
+
+
+ggplot(data=G3, aes(x = Var3, y=Freq)) + 
   geom_line(size=1.2, color="indianred2") + 
   geom_point(size=3,color="indianred2") + 
-  geom_hline(yintercept = 50) + xlab("Month of first symptom") + 
-  ylab("Relative frequency(%)")
+  geom_hline(yintercept = 50) + xlab("Month of first symptom") +
+  ylab("Relative frequency (%)") + scale_x_date(labels = date_format("%h %y"),
+               breaks = seq(from = min(G3$Var3), 
+                            to = max(G3$Var3), by = "month")) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+
+ggsave("epidemiologic_month",dpi="print",device="tiff")
+
+
+#Values
+d11 <- table(d1$month_year,d1$group)
+d11 <- as.data.frame(d11)
+d11 <- data.frame(str_split(d11$Var1,"/",simplify=TRUE),d11,G4$Freq*100)
+d11 <- d11 %>% arrange(X2,X1)
+d11$Var1 <- NULL
+d11 <- rename(d11,"Month"="X1","Year"="X2","group"="Var2","n"="Freq","%"="G4.Freq...100") 
+d11
+
+write_csv(d11, "dados_figura2.csv")
 ```
